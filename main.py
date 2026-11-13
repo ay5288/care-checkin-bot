@@ -13,9 +13,9 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 
 # ⚠️ 1. 請填入「獨居平安簽到資料庫」的 Google Apps Script /exec 網址
-GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwgRi22jzN5tNOiNHM-RdtW0U0X06Hkm44___Vj8bzewfsUD0tMVd-AbMeqRvFiajna/exec"
+GOOGLE_SHEET_API = "https://google.com"
 # ⚠️ 2. 請填入新機器人的 LINE 官方帳號 ID（包含 @ 符號，例如 @123abcde）
-LINE_BOT_BASIC_ID = "@189gmqxi"
+LINE_BOT_BASIC_ID = "@請填入新機器人的官方帳號ID"
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -50,6 +50,12 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str):
             TextComponent(text=subtitle, size="sm", weight="bold", color="#111111", wrap=True),
             BoxComponent(layout="vertical", backgroundColor="#F5F7FA", cornerRadius="8px", paddingAll="12px", contents=[
                 TextComponent(text=status_text, size="xs", color="#333333", wrap=True)
+            ]),
+            TextComponent(text="⏱️ 點擊下方快速切換通報週期（含 2 小時本人緩衝預警）：", size="xxs", color="#888888", wrap=True),
+            BoxComponent(layout="horizontal", spacing="sm", contents=[
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="12 小時", text="設定12")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="24 小時", text="設定24")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="48 小時", text="設定48"))
             ])
         ]),
         footer=BoxComponent(layout="vertical", spacing="sm", contents=[
@@ -81,7 +87,7 @@ def on_follow(event):
     card = make_main_card(
         "🛡️ 歡迎使用獨居平安簽到助手",
         f"嗨 {uname}！已為您完成首次平安建檔。",
-        f"🕒 首次簽到時間：{t_str}\n⏰ 警報規則：超過 24 小時未簽到，系統將自動通知您的緊急聯絡人。\n\n💡 請先點擊下方藍色按鈕，將邀請傳送給家人或好友完成綁定！",
+        f"🕒 首次簽到時間：{t_str}\n⏰ 目前守護週期：24 小時（逾時先提醒本人，2 小時後通知聯絡人）\n\n💡 請先點擊下方藍色按鈕，將邀請傳送給家人或好友完成綁定！",
         uid
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="歡迎使用獨居平安簽到助手", contents=card))
@@ -96,7 +102,7 @@ def on_location(event):
     card = make_main_card(
         "📍 居住位置更新成功",
         "已將此位置設為您的緊急通報參考地址：",
-        f"🏠 登記地址：{addr}\n（若超過 24 小時未簽到，此位置將隨警報一併發送給緊急聯絡人）",
+        f"🏠 登記地址：{addr}\n（若逾時未簽到，此位置將隨警報一併發送給緊急聯絡人）",
         uid
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="居住位置更新成功", contents=card))
@@ -107,7 +113,31 @@ def on_text(event):
     uname = get_user_name(uid)
     txt = event.message.text.strip()
 
-    # 1. 緊急聯絡人點擊邀請連結後的自動雙向綁定
+    # 0. 顯示使用教學說明卡片
+    if txt in ["教學", "說明", "使用教學", "怎麼用", "幫助", "?"]:
+        guide_card = make_main_card(
+            "📖 獨居平安簽到助手 · 使用教學",
+            "每天花 1 秒鐘報平安，守護您的居家安全：",
+            "1️⃣ 【每日簽到】點下方綠色按鈕，重新計算守護時間。\n2️⃣ 【彈性週期】可依作息切換 12 / 24 / 48 小時，逾時會先傳訊提醒您本人，2 小時無回應才通知聯絡人。\n3️⃣ 【綁定家人】點藍色按鈕轉傳給親友即可完成綁定。",
+            uid
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
+        return
+
+    # 1. 切換通報週期 (12 / 24 / 48 小時)
+    if txt in ["設定12", "設定24", "設定48"]:
+        hours = int(txt.replace("設定", ""))
+        call_sheet({"action": "set_hours", "user_id": uid, "user_name": uname, "hours": hours})
+        card = make_main_card(
+            f"⏰ 通報週期已更新為 {hours} 小時",
+            f"{uname}，您的守護規則已調整完成！",
+            f"🔔 新規則：若超過 {hours} 小時未簽到，系統將先傳送提醒給您；若再過 2 小時仍無回應，將自動通報緊急聯絡人。",
+            uid
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"通報週期已設為{hours}小時", contents=card))
+        return
+
+    # 2. 緊急聯絡人點擊邀請連結後的自動雙向綁定
     if txt.startswith("綁定:"):
         elder_uid = txt[3:].strip()
         if elder_uid == uid:
@@ -115,30 +145,32 @@ def on_text(event):
             return
         res = call_sheet({"action": "bind", "user_id": elder_uid, "contact_id": uid})
         elder_name = res.get("elder_name", "您的親友")
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🤝 【緊急聯絡人綁定成功】\n\n您已正式成為「{elder_name}」的平安守護聯絡人！\n當對方超過 24 小時未點擊平安簽到時，系統會第一時間透過此 LINE 帳號通知您。"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🤝 【緊急聯絡人綁定成功】\n\n您已正式成為「{elder_name}」的平安守護聯絡人！\n當對方超過設定時間未簽到（且逾 2 小時緩衝預警無回應）時，系統會第一時間透過此 LINE 帳號通知您。"))
         return
 
-    # 2. 查詢目前平安狀態
+    # 3. 查詢目前平安狀態
     if txt in ["狀態", "查詢", "我的狀態", "設定"]:
         res = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
         c_status = "✅ 已綁定緊急聯絡人" if res.get("has_contact") else "⚠️ 尚未綁定聯絡人（請點下方藍色按鈕邀請）"
+        cur_h = res.get("alert_hours", 24)
         card = make_main_card(
             "📋 我的平安守護狀態",
             f"守護對象：{uname}",
-            f"🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n👨‍👩‍👧 聯絡人狀態：{c_status}\n📍 登記位置：{res.get('last_location', '尚未設定')}",
+            f"🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n👨‍👩‍👧 聯絡人狀態：{c_status}\n📍 登記位置：{res.get('last_location', '尚未設定')}",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="我的平安守護狀態", contents=card))
         return
 
-    # 3. 預設任何問候或點擊「我今天很好」皆執行每日平安簽到
+    # 4. 預設任何問候或點擊「我今天很好」皆執行每日平安簽到
     res = call_sheet({"action": "checkin", "user_id": uid, "user_name": uname})
     t_str = res.get("time", "剛剛")
+    cur_h = res.get("alert_hours", 24)
     c_note = "✅ 緊急聯絡人守護中" if res.get("has_contact") else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
     card = make_main_card(
         "✅ 今日平安簽到成功！",
         f"{uname}，很高興知道您今天一切安好！",
-        f"🕒 簽到時間：{t_str}\n🔔 守護狀態：{c_note}",
+        f"🕒 簽到時間：{t_str}\n⏰ 守護週期：{cur_h} 小時（含 2 小時緩衝）\n🔔 守護狀態：{c_note}",
         uid
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="今日平安簽到成功", contents=card))
