@@ -13,9 +13,9 @@ LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET", "")
 
 # ⚠️ 1. 請填入「獨居平安簽到資料庫」的 Google Apps Script /exec 網址
-GOOGLE_SHEET_API = "https://google.com"
+GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwgRi22jzN5tNOiNHM-RdtW0U0X06Hkm44___Vj8bzewfsUD0tMVd-AbMeqRvFiajna/exec"
 # ⚠️ 2. 請填入新機器人的 LINE 官方帳號 ID（包含 @ 符號，例如 @123abcde）
-LINE_BOT_BASIC_ID = "@請填入新機器人的官方帳號ID"
+LINE_BOT_BASIC_ID = "@189gmqxi"
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
