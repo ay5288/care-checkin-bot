@@ -43,19 +43,19 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str):
 
     return BubbleContainer(
         size="mega",
-        header=BoxComponent(layout="vertical", backgroundColor="#1DB446", contents=[
-            TextComponent(text=title, weight="bold", size="md", color="#FFFFFF")
+        header=BoxComponent(layout="vertical", backgroundColor="#1DB446", paddingAll="14px", contents=[
+            TextComponent(text=title, weight="bold", size="md", color="#FFFFFF", wrap=True)
         ]),
         body=BoxComponent(layout="vertical", spacing="md", contents=[
             TextComponent(text=subtitle, size="sm", weight="bold", color="#111111", wrap=True),
             BoxComponent(layout="vertical", backgroundColor="#F5F7FA", cornerRadius="8px", paddingAll="12px", contents=[
                 TextComponent(text=status_text, size="xs", color="#333333", wrap=True)
             ]),
-            TextComponent(text="⏱️ 點擊下方快速切換通報週期（含 2 小時本人緩衝預警）：", size="xxs", color="#888888", wrap=True),
+            TextComponent(text="⏱️ 快速切換通報週期（含 2 小時本人緩衝預警）：", size="xxs", color="#888888", wrap=True),
             BoxComponent(layout="horizontal", spacing="sm", contents=[
-                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="12 小時", text="設定12")),
-                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="24 小時", text="設定24")),
-                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="48 小時", text="設定48"))
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="12h", text="設定12")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="24h", text="設定24")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="48h", text="設定48"))
             ])
         ]),
         footer=BoxComponent(layout="vertical", spacing="sm", contents=[
@@ -118,7 +118,7 @@ def on_text(event):
         guide_card = make_main_card(
             "📖 獨居平安簽到助手 · 使用教學",
             "每天花 1 秒鐘報平安，守護您的居家安全：",
-            "1️⃣ 【每日簽到】點下方綠色按鈕，重新計算守護時間。\n2️⃣ 【彈性週期】可依作息切換 12 / 24 / 48 小時，逾時會先傳訊提醒您本人，2 小時無回應才通知聯絡人。\n3️⃣ 【綁定家人】點藍色按鈕轉傳給親友即可完成綁定。",
+            "1. 每日簽到：點下方綠色按鈕，重新計算守護時間。\n2. 彈性週期：可依作息切換 12h / 24h / 48h，逾時會先傳訊提醒您本人，2 小時無回應才通知聯絡人。\n3. 綁定家人：點藍色按鈕轉傳給親友即可完成綁定。",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
