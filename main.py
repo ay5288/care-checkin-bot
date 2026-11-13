@@ -43,12 +43,12 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str):
 
     return BubbleContainer(
         size="mega",
-        header=BoxComponent(layout="vertical", backgroundColor="#1DB446", paddingAll="14px", contents=[
+        header=BoxComponent(layout="vertical", background_color="#1DB446", padding_all="14px", contents=[
             TextComponent(text=title, weight="bold", size="md", color="#FFFFFF", wrap=True)
         ]),
         body=BoxComponent(layout="vertical", spacing="md", contents=[
             TextComponent(text=subtitle, size="sm", weight="bold", color="#111111", wrap=True),
-            BoxComponent(layout="vertical", backgroundColor="#F5F7FA", cornerRadius="8px", paddingAll="12px", contents=[
+            BoxComponent(layout="vertical", background_color="#F5F7FA", corner_radius="8px", padding_all="12px", contents=[
                 TextComponent(text=status_text, size="xs", color="#333333", wrap=True)
             ]),
             TextComponent(text="⏱️ 快速切換通報週期（含 2 小時本人緩衝預警）：", size="xxs", color="#888888", wrap=True),
