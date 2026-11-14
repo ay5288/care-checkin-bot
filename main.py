@@ -20,7 +20,6 @@ LINE_BOT_BASIC_ID = "@189gmqxi"
 # ⚠️ 3. 請確認這個新機器人的 Render 公開網址（結尾不要加斜線）
 RENDER_BASE_URL = "https://care-checkin-bot.onrender.com"
 
-
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
@@ -183,7 +182,6 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
         footer=BoxComponent(layout="vertical", spacing="sm", contents=footer_btns)
     )
 
-
 def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置"):
     S = chr(47)
     bind_cmd = urllib.parse.quote(f"綁定:{uid}")
@@ -195,7 +193,9 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=No
         ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好")),
         ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人（最多綁定5位）", uri=share_uri)),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🪪 緊急醫療卡／登記電話", text="醫療卡")),
-        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="💊 設定每日用藥提醒", text="用藥提醒"))
+        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="💊 設定每日用藥提醒", text="用藥提醒")),
+        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🛡️ 防詐騙快篩（貼上可疑簡訊）", text="防詐騙")),
+        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="✈️ 外出／住院暫停守護", text="暫停模式"))
     ]
     if lat is not None and lon is not None:
         enc_addr = urllib.parse.quote(addr)
@@ -271,6 +271,78 @@ def on_text(event):
     uname = get_user_name(uid)
     txt = event.message.text.strip()
 
+    if txt in ["防詐騙", "詐騙", "查詐騙", "防詐"]:
+        S = chr(47)
+        check_uri = f"https:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{urllib.parse.quote('查詐騙:')}"
+        scam_guide = BubbleContainer(
+            size="mega",
+            header=BoxComponent(layout="vertical", background_color="#FF9500", padding_all="14px", contents=[
+                TextComponent(text="🛡️ 居家防詐騙快篩助手", weight="bold", size="md", color="#FFFFFF", wrap=True)
+            ]),
+            body=BoxComponent(layout="vertical", spacing="md", contents=[
+                TextComponent(text="收到奇怪的簡訊、不明網址或投資群組邀請嗎？先別急著點連結或匯款！", size="sm", weight="bold", color="#111111", wrap=True),
+                BoxComponent(layout="vertical", background_color="#FFF9EB", corner_radius="8px", padding_all="12px", contents=[
+                    TextComponent(text="🔍 怎麼幫您檢查？\n1. 點擊下方橘色按鈕（輸入框會自動帶入「查詐騙:」）。\n2. 把收到的可疑簡訊或網址直接貼上送出。\n3. 系統會立刻幫您分析詐騙風險特徵！", size="xs", color="#333333", wrap=True)
+                ])
+            ]),
+            footer=BoxComponent(layout="vertical", spacing="sm", contents=[
+                ButtonComponent(style="primary", color="#FF9500", height="sm", action=URIAction(label="🔍 貼上可疑簡訊／網址立即檢查", uri=check_uri)),
+                ButtonComponent(style="primary", color="#FF3B30", height="sm", action=URIAction(label="📞 直接撥打 165 反詐騙專線", uri="tel:165")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
+            ])
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="居家防詐騙快篩助手", contents=scam_guide))
+        return
+
+    if txt.startswith("查詐騙:") or txt.startswith("查詐騙："):
+        content = txt[4:].strip()
+        if not content:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 請在「查詐騙:」後面貼上您收到的簡訊內容或網址喔！"))
+            return
+
+        high_risk_keywords = [
+            "飆股", "保證獲利", "老師帶隊", "解除分期", "操作ATM", "網銀", "驗證碼", 
+            "水費逾期", "電費逾期", "罰單未繳", "通行費", "eTag", "包裹無法投遞", 
+            "普發現金", "點數到期", "帳戶異常", "凍結", "匯款", "USDT", "泰達幣", "加賴領取"
+        ]
+        suspicious_domains = [".xyz", ".top", ".vip", ".icu", ".club", ".cc", "bit.ly", "tinyurl", "reurl.cc", "cutt.ly"]
+
+        matched_reasons = []
+        for kw in high_risk_keywords:
+            if kw in content:
+                matched_reasons.append(f"• 含有常見詐騙關鍵字「{kw}」")
+        if "http://" in content.lower() or "https://" in content.lower():
+            matched_reasons.append("• 訊息內夾帶外部網址連結（切勿隨意點擊輸入個資）")
+        for dom in suspicious_domains:
+            if dom in content.lower():
+                matched_reasons.append(f"• 含有高風險短網址或可疑網域（{dom}）")
+
+        if len(matched_reasons) >= 1:
+            header_bg = "#FF3B30"
+            risk_title = "🚨 高度疑似詐騙訊息！請勿點擊或匯款"
+            risk_desc = "系統在您貼上的內容中偵測到以下高風險特徵：\n" + "\n".join(matched_reasons[:4]) + "\n\n⚠️ 提醒：政府機關、水電公司與銀行絕不會用簡訊網址要求您輸入帳號密碼或操作轉帳！"
+        else:
+            header_bg = "#1DB446"
+            risk_title = "🟡 未發現明顯關鍵字，但仍請保持警覺"
+            risk_desc = "雖然未偵測到典型釣魚關鍵字，但新型詐騙手法層出不窮：\n• 凡是談到「錢、匯款、投資、提供驗證碼」一律先掛斷查證。\n• 建議直接撥打下方 165 反詐騙專線或詢問家人確認！"
+
+        result_card = BubbleContainer(
+            size="mega",
+            header=BoxComponent(layout="vertical", background_color=header_bg, padding_all="14px", contents=[
+                TextComponent(text=risk_title, weight="bold", size="md", color="#FFFFFF", wrap=True)
+            ]),
+            body=BoxComponent(layout="vertical", spacing="md", contents=[
+                BoxComponent(layout="vertical", background_color="#F5F7FA", corner_radius="8px", padding_all="12px", contents=[
+                    TextComponent(text=risk_desc, size="xs", color="#222222", wrap=True)
+                ])
+            ]),
+            footer=BoxComponent(layout="vertical", spacing="sm", contents=[
+                ButtonComponent(style="primary", color="#FF3B30", height="sm", action=URIAction(label="📞 撥打 165 反詐騙專線查證", uri="tel:165")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
+            ])
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="防詐騙快篩檢測結果", contents=result_card))
+        return
     if txt in ["醫療卡", "緊急醫療卡", "急救卡"]:
         st = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
         med = st.get("medical_info", "尚未填寫")
@@ -341,11 +413,70 @@ def on_text(event):
         msg = "🔕 已為您關閉每日定時用藥提醒。" if t_val == "關閉" else f"💊 設定成功！系統將於每天【{t_val}】準時推播用藥提醒卡片給您，點擊「✅ 已服藥」即可順便完成今日平安簽到！"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
         return
+
+    if txt in ["暫停模式", "暫停守護", "外出暫停", "暫停"]:
+        st = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        g_st = st.get("guard_status", "NORMAL")
+        if g_st == "PAUSED_INDEFINITE":
+            cur_mode_txt = "⏸️ 目前狀態：長期暫停中（需手動啟動）"
+        elif g_st.startswith("PAUSED_"):
+            cur_mode_txt = f"⏸️ 目前狀態：暫停中（將於 {g_st.replace('PAUSED_', '')} 自動恢復）"
+        else:
+            cur_mode_txt = "🟢 目前狀態：日常平安守護啟動中"
+
+        pause_card = BubbleContainer(
+            size="mega",
+            header=BoxComponent(layout="vertical", background_color="#5856D6", padding_all="14px", contents=[
+                TextComponent(text="✈️ 外出／住院暫停與啟動管理", weight="bold", size="md", color="#FFFFFF", wrap=True)
+            ]),
+            body=BoxComponent(layout="vertical", spacing="md", contents=[
+                TextComponent(text=cur_mode_txt, size="sm", weight="bold", color="#5856D6", wrap=True),
+                TextComponent(text="出國旅遊、住院檢查或與家人同住期間，可選擇暫停天數或長期暫停；返家後點擊「▶️ 立即啟動守護」即可恢復計時：", size="xs", color="#555555", wrap=True),
+                BoxComponent(layout="horizontal", spacing="sm", contents=[
+                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="⏸️ 暫停3天", text="暫停3天")),
+                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="⏸️ 暫停7天", text="暫停7天"))
+                ])
+            ]),
+            footer=BoxComponent(layout="vertical", spacing="sm", contents=[
+                ButtonComponent(style="primary", color="#FF9500", height="sm", action=MessageAction(label="⏸️ 長期暫停（直到手動啟動）", text="長期暫停")),
+                ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="▶️ 立即啟動日常守護", text="啟動守護")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
+            ])
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="外出／住院暫停與啟動管理", contents=pause_card))
+        return
+
+    if txt in ["暫停3天", "暫停7天", "長期暫停"]:
+        mode_val = "indefinite" if txt == "長期暫停" else ("3" if "3" in txt else "7")
+        res = call_sheet({"action": "pause", "user_id": uid, "user_name": uname, "mode": mode_val})
+        r_time = res.get("resume_time", "")
+        title_label = "⏸️ 已開啟長期暫停守護" if mode_val == "indefinite" else f"⏸️ 已暫停守護（{mode_val} 天）"
+        card = make_main_card(
+            title_label,
+            f"{uname}，已為您暫停失聯通報功能！",
+            f"🕒 恢復規則：{r_time}\n🛡️ 期間內系統不會發送失聯警報；若想提前恢復，只要點擊「▶️ 啟動守護」或「🟢 我今天很好」即可立刻重新啟動！",
+            uid
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=title_label, contents=card))
+        return
+
+    if txt in ["啟動守護", "恢復守護", "啟動"]:
+        res = call_sheet({"action": "checkin", "user_id": uid, "user_name": uname})
+        t_str = res.get("time", "剛剛")
+        cur_h = res.get("alert_hours", 24)
+        card = make_main_card(
+            "▶️ 日常平安守護已正式啟動！",
+            f"{uname}，歡迎回來！系統已重新開始為您守護：",
+            f"🕒 啟動時間：{t_str}\n⏰ 守護週期：{cur_h} 小時（含 2 小時緩衝）\n🟢 守護狀態：正常運作中",
+            uid
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="日常平安守護已正式啟動", contents=card))
+        return
     if txt in ["教學", "說明", "使用教學", "怎麼用", "幫助", "?"]:
         guide_card = make_main_card(
             "📖 獨居平安簽到助手 · 使用教學",
             "每天花 1 秒鐘報平安，守護您的居家安全：",
-            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡與電話：點「醫療卡」登記血型、病史與聯絡電話，失聯警報時自動附上「一鍵直撥電話」按鈕給聯絡人。\n3. 用藥提醒：支援設定多組「小時:分鐘」，服藥時順便報平安。\n4. 多位家人守護：最多可綁定 5 位緊急聯絡人，失聯時同步通知所有家人！",
+            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡與電話：登記血型、病史與本人電話，失聯警報時自動附上「一鍵直撥電話」按鈕給聯絡人。\n3. 用藥提醒與防詐騙：支援多組「小時:分鐘」吃藥提醒，以及可疑簡訊一鍵快篩。\n4. 外出暫停與多位家人：支援 3天/7天/長期暫停守護，最多可綁定 5 位緊急聯絡人！",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
@@ -418,16 +549,24 @@ def on_text(event):
         c_cnt = res.get("contact_count", 0)
         c_status = f"✅ 已綁定 {c_cnt} / 5 位緊急聯絡人" if c_cnt > 0 else "⚠️ 尚未綁定聯絡人（請點下方藍色按鈕邀請）"
         cur_h = res.get("alert_hours", 24)
+        g_st = res.get("guard_status", "NORMAL")
+        if g_st == "PAUSED_INDEFINITE":
+            guard_label = "⏸️ 長期暫停中（需手動啟動）"
+        elif g_st.startswith("PAUSED_"):
+            guard_label = f"⏸️ 暫停中（{g_st.replace('PAUSED_', '')} 恢復）"
+        else:
+            guard_label = "🟢 正常啟動中"
+
         loc_str = res.get("last_location", "尚未設定")
         med_str = res.get("medical_info", "尚未填寫")
         med_t = res.get("med_times", "尚未設定")
         phone_str = res.get("phone", "尚未設定")
         lat, lon = parse_latlon(loc_str)
-        clean_addr = loc_str.split("(")[0].strip() if "(" in loc_str else "最後平安位置"
+        clean_addr = next(iter(loc_str.split("("))).strip() if "(" in loc_str else "最後平安位置"
         card = make_main_card(
             "📋 我的平安守護狀態",
             f"守護對象：{uname}",
-            f"🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n💊 用藥提醒：{med_t}\n👨‍👩‍👧 聯絡人狀態：{c_status}\n📞 登記電話：{phone_str}\n🪪 緊急醫療卡：{med_str}\n📍 最後平安位置：{loc_str}",
+            f"🛡️ 守護開關：{guard_label}\n🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n💊 用藥提醒：{med_t}\n👨‍👩‍👧 聯絡人狀態：{c_status}\n📞 本人電話：{phone_str}\n🪪 緊急醫療卡：{med_str}\n📍 最後平安位置：{loc_str}",
             uid, lat=lat, lon=lon, addr=clean_addr
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="我的平安守護狀態", contents=card))
@@ -441,7 +580,7 @@ def on_text(event):
     st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
     loc_str = st_info.get("last_location", "")
     lat, lon = parse_latlon(loc_str)
-    clean_addr = loc_str.split("(")[0].strip() if "(" in loc_str else "最後平安位置"
+    clean_addr = next(iter(loc_str.split("("))).strip() if "(" in loc_str else "最後平安位置"
     card = make_main_card(
         "✅ 今日平安簽到成功！",
         f"{uname}，很高興知道您今天一切安好！",
