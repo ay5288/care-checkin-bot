@@ -82,7 +82,7 @@ def latlon_to_pixel(lat, lon, z=16):
 def parse_latlon(loc_str: str):
     try:
         if "(" in loc_str and ")" in loc_str:
-            part = loc_str.split("(")[-1].split(")")
+            part = next(iter(loc_str.split("(")[-1].split(")")))
             lat_s, lon_s = part.split(",")
             return float(lat_s.strip()), float(lon_s.strip())
     except Exception:
