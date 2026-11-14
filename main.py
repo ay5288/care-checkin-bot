@@ -39,7 +39,7 @@ CARE_MAP_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8">
   .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
   .title { font-weight: bold; font-size: 16px; color: #111; margin-bottom: 6px; }
   .meta { font-size: 13px; color: #555; line-height: 1.5; margin-bottom: 12px; }
-  .btn { display: block; width: 100%; box-sizing: border-box; text-align: center; text-decoration: none; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: bold; color: #fff; margin-bottom: 10px; border: 0; cursor: pointer; }
+  .btn { display: block; width: 100%; box-sizing: border-box; text-align: center; text-decoration: none; padding: 13px; border-radius: 10px; font-size: 15px; font-weight: bold; color: #fff; margin-bottom: 10px; }
   .btn-red { background: #FF3B30; }
   .btn-green { background: #1DB446; }
   .btn-blue { background: #007AFF; }
@@ -60,25 +60,16 @@ CARE_MAP_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8">
   <div class="card">
     <div class="title">📍 登記地址與座標</div>
     <div class="meta">__ADDR__<br>座標：__LAT__, __LON__</div>
-    <button class="btn btn-blue" onclick="navSpot(__LAT__, __LON__, '最後平安位置')">🧭 導航前往此登記位置</button>
+    <a class="btn btn-blue" href="__NAV_URL__" target="_blank" rel="noopener">🧭 導航前往此登記位置</a>
   </div>
   <div class="card">
     <div class="title">🏥 周邊 500m～1.5km 緊急醫療與藥局</div>
     <div class="meta">點擊下方按鈕，直接在地圖顯示距離此位置最近的急診室、健保藥局與派出所：</div>
-    <button class="btn btn-red" onclick="searchNearby('急診醫院', __LAT__, __LON__)">🏥 搜尋附近急診醫院</button>
-    <button class="btn btn-green" onclick="searchNearby('健保藥局', __LAT__, __LON__)">💊 搜尋附近健保藥局</button>
-    <button class="btn btn-blue" onclick="searchNearby('派出所', __LAT__, __LON__)">🚓 搜尋附近警察局／派出所</button>
+    <a class="btn btn-red" href="__HOSP_URL__" target="_blank" rel="noopener">🏥 搜尋附近急診醫院</a>
+    <a class="btn btn-green" href="__PHARM_URL__" target="_blank" rel="noopener">💊 搜尋附近健保藥局</a>
+    <a class="btn btn-blue" href="__POLICE_URL__" target="_blank" rel="noopener">🚓 搜尋附近警察局／派出所</a>
   </div>
 </div>
-<script>
-var S = String.fromCharCode(47);
-function navSpot(lat, lon, label) {
-  window.location.href = "https:" + S + S + "://google.com" + S + "maps" + S + "dir" + S + "?api=1&destination=" + lat + "," + lon + "&travelmode=walking";
-}
-function searchNearby(kw, lat, lon) {
-  window.location.href = "https:" + S + S + "://google.com" + S + "maps" + S + "search" + S + encodeURIComponent(kw) + S + "@" + lat + "," + lon + ",15z";
-}
-</script>
 </body></html>"""
 def latlon_to_pixel(lat, lon, z=16):
     n = 2.0 ** z
@@ -136,7 +127,26 @@ def care_map_view(lat: float, lon: float, addr: str = "登記位置"):
         f'<circle cx="{user_px}" cy="{user_py}" r="10" fill="#1DB446" stroke="#fff" stroke-width="3"/>'
     ]
     safe_addr = addr.replace("<", "").replace(">", "")
-    html = CARE_MAP_HTML.replace("__OFFSET_X__", str(offset_x)).replace("__OFFSET_Y__", str(offset_y)).replace("__TILES__", "".join(tiles_html)).replace("__SVG_MARKS__", "".join(svg_marks)).replace("__ADDR__", safe_addr).replace("__LAT__", str(lat)).replace("__LON__", str(lon))
+    
+    # 直接在後端生成標準 Maps 導航與搜尋超連結（100% 相容 iOS / Android）
+    gmap_base = f"https:{S}{S}://google.com{S}maps"
+    nav_url = f"{gmap_base}{S}dir{S}?api=1&destination={lat},{lon}&travelmode=walking"
+    hosp_url = f"{gmap_base}{S}search{S}?api=1&query={urllib.parse.quote('急診醫院')}+{lat},{lon}"
+    pharm_url = f"{gmap_base}{S}search{S}?api=1&query={urllib.parse.quote('健保藥局')}+{lat},{lon}"
+    pol_url = f"{gmap_base}{S}search{S}?api=1&query={urllib.parse.quote('派出所')}+{lat},{lon}"
+
+    html = (CARE_MAP_HTML
+            .replace("__OFFSET_X__", str(offset_x))
+            .replace("__OFFSET_Y__", str(offset_y))
+            .replace("__TILES__", "".join(tiles_html))
+            .replace("__SVG_MARKS__", "".join(svg_marks))
+            .replace("__ADDR__", safe_addr)
+            .replace("__LAT__", str(lat))
+            .replace("__LON__", str(lon))
+            .replace("__NAV_URL__", nav_url)
+            .replace("__HOSP_URL__", hosp_url)
+            .replace("__PHARM_URL__", pharm_url)
+            .replace("__POL_URL__", pol_url))
     return HTMLResponse(content=html)
 
 def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置"):
@@ -150,7 +160,6 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=No
         ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好")),
         ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人成為緊急聯絡人", uri=share_uri))
     ]
-    # 若已有登記座標，自動顯示「🗺️ 最後位置與周邊急診藥局地圖」按鈕
     if lat is not None and lon is not None:
         enc_addr = urllib.parse.quote(addr)
         map_uri = f"{RENDER_BASE_URL}/care_map?lat={lat}&lon={lon}&addr={enc_addr}&openExternalBrowser=1"
@@ -276,14 +285,14 @@ def on_text(event):
     res = call_sheet({"action": "checkin", "user_id": uid, "user_name": uname})
     t_str = res.get("time", "剛剛")
     cur_h = res.get("alert_hours", 24)
-    c_note = "✅ 緊急聯絡人守護中" if res.get("has_contact") else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
-    st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
-    loc_str = st_info.get("last_location", "")
-    lat, lon = parse_latlon(loc_str)
-    card = make_main_card(
-        "✅ 今日平安簽到成功！",
-        f"{uname}，很高興知道您今天一切安好！",
-        f"🕒 簽到時間：{t_str}\n⏰ 守護週期：{cur_h} 小時（含 2 小時緩衝）\n🔔 守護狀態：{c_note}",
-        uid, lat=lat, lon=lon, addr=loc_str.split("(")[0].strip() if loc_str else "最後平安位置"
-    )
-    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="今日平安簽到成功", contents=card))
+c_note = "✅ 緊急聯絡人守護中" if res.get("has_contact") else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
+st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+loc_str = st_info.get("last_location", "")
+lat, lon = parse_latlon(loc_str)
+card = make_main_card(
+"✅ 今日平安簽到成功！",
+f"{uname}，很高興知道您今天一切安好！",
+f"🕒 簽到時間：{t_str}\n⏰ 守護週期：{cur_h} 小時（含 2 小時緩衝）\n🔔 守護狀態：{c_note}",
+uid, lat=lat, lon=lon, addr=loc_str.split("(")[0].strip() if loc_str else "最後平安位置"
+)
+line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="今日平安簽到成功", contents=card))
