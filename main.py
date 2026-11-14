@@ -18,7 +18,7 @@ GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwgRi22jzN5tNOiNHM-R
 # ⚠️ 2. 請填入新機器人的 LINE 官方帳號 ID（包含 @ 符號，例如 @123abcde）
 LINE_BOT_BASIC_ID = "@189gmqxi"
 # ⚠️ 3. 請確認這個新機器人的 Render 公開網址（結尾不要加斜線）
-RENDER_BASE_URL = ""https://care-checkin-bot.onrender.com
+RENDER_BASE_URL = "https://care-checkin-bot.onrender.com"
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
