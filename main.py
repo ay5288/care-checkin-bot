@@ -152,16 +152,13 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
     S = chr(47)
     edit_med_uri = f"https:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{urllib.parse.quote('醫療:')}"
     edit_phone_uri = f"https:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{urllib.parse.quote('電話:')}"
-    clean_phone = re.sub(r"[^0-9+]", "", str(phone or ""))
 
-    footer_btns = []
-    if len(clean_phone) >= 7:
-        footer_btns.append(ButtonComponent(style="primary", color="#1DB446", height="sm", action=URIAction(label=f"📞 一鍵直撥電話 ({phone})", uri=f"tel:{clean_phone}")))
-    footer_btns.extend([
-        ButtonComponent(style="primary", color="#FF3B30", height="sm", action=URIAction(label="✏️ 輸入／修改醫療資料", uri=edit_med_uri)),
-        ButtonComponent(style="secondary", height="sm", action=URIAction(label="📱 登記／修改聯絡電話", uri=edit_phone_uri)),
+    footer_btns = [
+        ButtonComponent(style="primary", color="#FF3B30", height="sm", action=URIAction(label="🚨 緊急撥打 119 救護專線", uri="tel:119")),
+        ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="✏️ 輸入／修改醫療資料", uri=edit_med_uri)),
+        ButtonComponent(style="secondary", height="sm", action=URIAction(label="📱 登記／修改本人電話（供警報通報）", uri=edit_phone_uri)),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
-    ])
+    ]
 
     return BubbleContainer(
         size="mega",
@@ -169,14 +166,14 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
             TextComponent(text="🪪 隨身緊急醫療卡（ICE 急救資訊）", weight="bold", size="md", color="#FFFFFF", wrap=True)
         ]),
         body=BoxComponent(layout="vertical", spacing="md", contents=[
-            TextComponent(text=f"持卡人：{uname}　｜　電話：{phone}", size="sm", weight="bold", color="#111111", wrap=True),
+            TextComponent(text=f"持卡人：{uname}　｜　本人電話：{phone}", size="sm", weight="bold", color="#111111", wrap=True),
             BoxComponent(layout="vertical", background_color="#FFF5F5", corner_radius="8px", padding_all="12px", contents=[
                 TextComponent(text="📋 血型／過敏史／病史／常去醫院：", size="xs", weight="bold", color="#FF3B30"),
                 TextComponent(text=med_info, size="sm", color="#222222", margin="sm", wrap=True)
             ]),
             TextComponent(text=f"📍 登記居住地：{loc_str}", size="xs", color="#666666", wrap=True),
             TextComponent(
-                text="💡 填寫說明：\n點擊下方按鈕會自動帶入「醫療:」或「電話:」並彈出鍵盤，直接接著輸入並送出即可（失聯警報時將一併附上電話與一鍵撥號按鈕給聯絡人）。",
+                text="💡 說明：登記的「本人電話」將於觸發失聯警報時，附帶一鍵直撥按鈕發送給您的緊急聯絡人。",
                 size="xxs",
                 color="#666666",
                 margin="md",
@@ -185,6 +182,7 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
         ]),
         footer=BoxComponent(layout="vertical", spacing="sm", contents=footer_btns)
     )
+
 
 def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置"):
     S = chr(47)
