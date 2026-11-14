@@ -81,7 +81,7 @@ def latlon_to_pixel(lat, lon, z=16):
 def parse_latlon(loc_str: str):
     try:
         if "(" in loc_str and ")" in loc_str:
-            part = loc_str.split("(")[-1].split(")")
+            part = loc_str.split("(")[-1].split(")")[0]
             lat_s, lon_s = part.split(",")
             return float(lat_s.strip()), float(lon_s.strip())
     except Exception:
@@ -181,13 +181,13 @@ def make_medical_card(uname: str, med_info: str, loc_str: str):
 def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置"):
     S = chr(47)
     bind_cmd = urllib.parse.quote(f"綁定:{uid}")
-    share_text = urllib.parse.quote(f"我正在使用「獨居平安簽到助手」每天報平安！請點擊下方連結成為我的緊急聯絡人：\nhttps:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{bind_cmd}")
+    share_text = urllib.parse.quote(f"我正在使用「獨居平安簽到助手」每天報平安！請點擊下方連結成為我的緊急聯絡人（最多可綁定 5 位親友）：\nhttps:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{bind_cmd}")
     share_uri = f"https:{S}{S}line.me{S}R{S}share?text={share_text}"
     loc_uri = f"https:{S}{S}line.me{S}R{S}nv{S}location{S}"
 
     footer_btns = [
         ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好")),
-        ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人成為緊急聯絡人", uri=share_uri)),
+        ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人（最多綁定5位）", uri=share_uri)),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🪪 查看／設定緊急醫療卡", text="醫療卡")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="💊 設定每日用藥提醒", text="用藥提醒"))
     ]
@@ -239,7 +239,7 @@ def on_follow(event):
     card = make_main_card(
         "🛡️ 歡迎使用獨居平安簽到助手",
         f"嗨 {uname}！已為您完成首次平安建檔。",
-        f"🕒 首次簽到時間：{t_str}\n⏰ 目前守護週期：24 小時（逾時先提醒本人，2 小時後通知聯絡人）\n\n💡 請先傳送居住位置並填寫「緊急醫療卡」，失聯通報時將一併提供給聯絡人！",
+        f"🕒 首次簽到時間：{t_str}\n⏰ 目前守護週期：24 小時（逾時先提醒本人，2 小時後通知聯絡人）\n\n💡 請先傳送居住位置並填寫「緊急醫療卡」，最多可邀請 5 位家人成為緊急聯絡人！",
         uid
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="歡迎使用獨居平安簽到助手", contents=card))
@@ -297,17 +297,17 @@ def on_text(event):
                 TextComponent(text="💊 每日定時用藥提醒（兼報平安）", weight="bold", size="md", color="#FFFFFF", wrap=True)
             ]),
             body=BoxComponent(layout="vertical", spacing="md", contents=[
-                TextComponent(text=f"目前設定的提醒時段：{cur_times} 點", size="sm", weight="bold", color="#111111", wrap=True),
-                TextComponent(text="時間一到，系統會主動發送用藥提醒卡片；點擊「✅ 已服藥」即可順便完成當天的平安簽到！", size="xs", color="#555555", wrap=True),
-                TextComponent(text="⚡ 一鍵套用常見時段（24小時制）：", size="xxs", color="#888888"),
+                TextComponent(text=f"目前設定時段：{cur_times}", size="sm", weight="bold", color="#111111", wrap=True),
+                TextComponent(text="支援設定多組「小時:分鐘」（例如 08:30, 12:30, 20:00）。時間一到系統會自動推播提醒卡片，點擊「✅ 已服藥」即可順便完成今日平安簽到！", size="xs", color="#555555", wrap=True),
+                TextComponent(text="⚡ 一鍵套用常見多時段：", size="xxs", color="#888888"),
                 BoxComponent(layout="horizontal", spacing="sm", contents=[
-                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="早上8點", text="吃藥:08")),
-                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="早晚8點", text="吃藥:08,20")),
-                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="三餐飯後", text="吃藥:08,13,19"))
+                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="08:00", text="吃藥:08:00")),
+                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="早晚8點", text="吃藥:08:00, 20:00")),
+                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label="三餐飯後", text="吃藥:08:30, 12:30, 18:30"))
                 ])
             ]),
             footer=BoxComponent(layout="vertical", spacing="sm", contents=[
-                ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="✏️ 自訂其他小時（例如 09,21）", uri=custom_uri)),
+                ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="✏️ 自訂多時段（如 08:30, 21:15）", uri=custom_uri)),
                 ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🔕 關閉用藥提醒", text="吃藥:關閉"))
             ])
         )
@@ -315,16 +315,16 @@ def on_text(event):
         return
 
     if txt.startswith("吃藥:") or txt.startswith("吃藥："):
-        t_val = txt[3:].strip()
+        t_val = txt[3:].strip().replace("，", ", ").replace("：", ":")
         call_sheet({"action": "set_med_times", "user_id": uid, "user_name": uname, "med_times": t_val})
-        msg = "🔕 已為您關閉每日定時用藥提醒。" if t_val == "關閉" else f"💊 設定成功！系統將於每天 {t_val} 點準時推播用藥提醒卡片給您，點擊「✅ 已服藥」即可順便完成今日平安簽到！"
+        msg = "🔕 已為您關閉每日定時用藥提醒。" if t_val == "關閉" else f"💊 設定成功！系統將於每天【{t_val}】準時推播用藥提醒卡片給您，點擊「✅ 已服藥」即可順便完成今日平安簽到！"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
         return
     if txt in ["教學", "說明", "使用教學", "怎麼用", "幫助", "?"]:
         guide_card = make_main_card(
             "📖 獨居平安簽到助手 · 使用教學",
             "每天花 1 秒鐘報平安，守護您的居家安全：",
-            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡：點「醫療卡」填寫血型與病史，失聯通報時自動附帶給聯絡人。\n3. 用藥提醒：點「用藥提醒」設定吃藥時間，服藥時順便報平安！\n4. 家人關心：綁定後家人可隨時傳送暖心問候提醒您報平安。",
+            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡：點「醫療卡」填寫血型與病史，失聯通報時自動附帶給聯絡人。\n3. 用藥提醒：支援設定多組「小時:分鐘」，服藥時順便報平安。\n4. 多位家人守護：最多可綁定 5 位緊急聯絡人，失聯時同步通知所有家人！",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
@@ -336,7 +336,7 @@ def on_text(event):
         card = make_main_card(
             f"⏰ 通報週期已更新為 {hours} 小時",
             f"{uname}，您的守護規則已調整完成！",
-            f"🔔 新規則：若超過 {hours} 小時未簽到，系統將先傳送提醒給您；若再過 2 小時仍無回應，將自動通報緊急聯絡人並附上緊急醫療卡。",
+            f"🔔 新規則：若超過 {hours} 小時未簽到，系統將先傳送提醒給您；若再過 2 小時仍無回應，將自動通報所有已綁定的緊急聯絡人並附上緊急醫療卡。",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"通報週期已設為{hours}小時", contents=card))
@@ -348,15 +348,23 @@ def on_text(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 不能綁定自己為緊急聯絡人喔！請把邀請卡片轉傳給您的家人或朋友點擊。"))
             return
         res = call_sheet({"action": "bind", "user_id": elder_uid, "contact_id": uid})
+        st_bind = res.get("status", "")
         elder_name = res.get("elder_name", "您的親友")
+        c_num = res.get("count", 1)
+
+        if st_bind == "full":
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ 「{elder_name}」的緊急聯絡人已達 5 位上限囉！如欲調整請聯繫對方。"))
+            return
+
+        title_msg = "✅ 您已是守護聯絡人之一！" if st_bind == "already_bound" else "🤝 緊急聯絡人綁定成功！"
         bind_card = BubbleContainer(
             size="mega",
             header=BoxComponent(layout="vertical", background_color="#007AFF", padding_all="14px", contents=[
-                TextComponent(text="🤝 緊急聯絡人綁定成功！", weight="bold", size="md", color="#FFFFFF")
+                TextComponent(text=title_msg, weight="bold", size="md", color="#FFFFFF")
             ]),
             body=BoxComponent(layout="vertical", spacing="md", contents=[
-                TextComponent(text=f"您已正式成為「{elder_name}」的平安守護聯絡人！", size="sm", weight="bold", color="#111111", wrap=True),
-                TextComponent(text="當對方超過設定時間未簽到時，系統會第一時間通知您。平時您也可以隨時點擊下方按鈕（或輸入「關心」），傳送暖心問候提醒對方報平安！", size="xs", color="#555555", wrap=True)
+                TextComponent(text=f"您已成為「{elder_name}」的第 {c_num} 位平安守護聯絡人（上限 5 位）！", size="sm", weight="bold", color="#111111", wrap=True),
+                TextComponent(text="當對方超過設定時間未簽到時，系統會同步通知所有已綁定的聯絡人。平時您也可以隨時點擊下方按鈕（或輸入「關心」），傳送暖心問候提醒對方報平安！", size="xs", color="#555555", wrap=True)
             ]),
             footer=BoxComponent(layout="vertical", contents=[
                 ButtonComponent(style="primary", color="#FF9500", height="sm", action=MessageAction(label="💌 立即傳送關心問候", text="關心"))
@@ -381,12 +389,13 @@ def on_text(event):
             )
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="暖心問候已送達", contents=reply_card))
         else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="💡 您目前尚未成為任何親友的緊急聯絡人喔！請請您的家人點擊他帳號裡的「👨‍👩‍👧 邀請家人成為緊急聯絡人」並傳送連結給您即可完成綁定。"))
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="💡 您目前尚未成為任何親友的緊急聯絡人喔！請請您的家人點擊他帳號裡的「👨‍👩‍👧 邀請家人（最多綁定5位）」並傳送連結給您即可完成綁定。"))
         return
 
     if txt in ["狀態", "查詢", "我的狀態", "設定"]:
         res = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
-        c_status = "✅ 已綁定緊急聯絡人" if res.get("has_contact") else "⚠️ 尚未綁定聯絡人（請點下方藍色按鈕邀請）"
+        c_cnt = res.get("contact_count", 0)
+        c_status = f"✅ 已綁定 {c_cnt} / 5 位緊急聯絡人" if c_cnt > 0 else "⚠️ 尚未綁定聯絡人（請點下方藍色按鈕邀請）"
         cur_h = res.get("alert_hours", 24)
         loc_str = res.get("last_location", "尚未設定")
         med_str = res.get("medical_info", "尚未填寫")
@@ -396,7 +405,7 @@ def on_text(event):
         card = make_main_card(
             "📋 我的平安守護狀態",
             f"守護對象：{uname}",
-            f"🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n💊 用藥提醒：{med_t} 點\n👨‍👩‍👧 聯絡人狀態：{c_status}\n🪪 緊急醫療卡：{med_str}\n📍 最後平安位置：{loc_str}",
+            f"🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n💊 用藥提醒：{med_t}\n👨‍👩‍👧 聯絡人狀態：{c_status}\n🪪 緊急醫療卡：{med_str}\n📍 最後平安位置：{loc_str}",
             uid, lat=lat, lon=lon, addr=clean_addr
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="我的平安守護狀態", contents=card))
@@ -405,7 +414,8 @@ def on_text(event):
     res = call_sheet({"action": "checkin", "user_id": uid, "user_name": uname})
     t_str = res.get("time", "剛剛")
     cur_h = res.get("alert_hours", 24)
-    c_note = "✅ 緊急聯絡人守護中" if res.get("has_contact") else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
+    c_cnt = res.get("contact_count", 0)
+    c_note = f"✅ {c_cnt} 位緊急聯絡人守護中" if c_cnt > 0 else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
     st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
     loc_str = st_info.get("last_location", "")
     lat, lon = parse_latlon(loc_str)
