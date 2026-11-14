@@ -19,6 +19,7 @@ GOOGLE_SHEET_API = "https://script.google.com/macros/s/AKfycbwgRi22jzN5tNOiNHM-R
 LINE_BOT_BASIC_ID = "@189gmqxi"
 # ⚠️ 3. 請確認這個新機器人的 Render 公開網址（結尾不要加斜線）
 RENDER_BASE_URL = "https://care-checkin-bot.onrender.com"
+
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
@@ -59,14 +60,14 @@ CARE_MAP_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8">
   <div class="card">
     <div class="title">📍 登記地址與座標</div>
     <div class="meta">__ADDR__<br>座標：__LAT__, __LON__</div>
-    <a class="btn btn-blue" href="__NAV_URL__" target="_top">🧭 導航前往此登記位置</a>
+    <a class="btn btn-blue" href="__NAV_URL__">🧭 導航前往此登記位置</a>
   </div>
   <div class="card">
     <div class="title">🏥 周邊 500m～1.5km 緊急醫療與藥局</div>
     <div class="meta">點擊下方按鈕，直接在地圖顯示距離此位置最近的急診室、健保藥局與派出所：</div>
-    <a class="btn btn-red" href="__HOSP_URL__" target="_top">🏥 搜尋附近急診醫院</a>
-    <a class="btn btn-green" href="__PHARM_URL__" target="_top">💊 搜尋附近健保藥局</a>
-    <a class="btn btn-blue" href="__POL_URL__" target="_top">🚓 搜尋附近警察局／派出所</a>
+    <a class="btn btn-red" href="__HOSP_URL__">🏥 搜尋附近急診醫院</a>
+    <a class="btn btn-green" href="__PHARM_URL__">💊 搜尋附近健保藥局</a>
+    <a class="btn btn-blue" href="__POL_URL__">🚓 搜尋附近警察局／派出所</a>
   </div>
 </div>
 </body></html>"""
@@ -126,19 +127,12 @@ def care_map_view(lat: float, lon: float, addr: str = "登記位置"):
         f'<circle cx="{user_px}" cy="{user_py}" r="10" fill="#1DB446" stroke="#fff" stroke-width="3"/>'
     ]
     safe_addr = addr.replace("<", "").replace(">", "")
-    
-    # 直接在後端生成標準 Maps 導航與搜尋超連結（100% 相容 iOS / Android）
-    S = chr(47)
     host = "maps." + "google.com"
     base = f"https:{S}{S}{host}{S}"
-    
-    # 1. 導航前往最後登記位置
     nav_url = f"{base}?daddr={lat},{lon}&dirflg=w"
-    # 2. 搜尋附近急診醫院、健保藥局、派出所（使用標準 q= 參數，iPhone / Android 皆 0.1 秒秒開）
     hosp_url = f"{base}?q={urllib.parse.quote('急診醫院')}&ll={lat},{lon}&z=15"
     pharm_url = f"{base}?q={urllib.parse.quote('健保藥局')}&ll={lat},{lon}&z=15"
     pol_url = f"{base}?q={urllib.parse.quote('派出所')}&ll={lat},{lon}&z=15"
-
 
     html = (CARE_MAP_HTML
             .replace("__OFFSET_X__", str(offset_x))
@@ -154,6 +148,25 @@ def care_map_view(lat: float, lon: float, addr: str = "登記位置"):
             .replace("__POL_URL__", pol_url))
     return HTMLResponse(content=html)
 
+def make_medical_card(uname: str, med_info: str, loc_str: str):
+    return BubbleContainer(
+        size="mega",
+        header=BoxComponent(layout="vertical", background_color="#FF3B30", padding_all="14px", contents=[
+            TextComponent(text="🪪 隨身緊急醫療卡（ICE 急救資訊）", weight="bold", size="md", color="#FFFFFF", wrap=True)
+        ]),
+        body=BoxComponent(layout="vertical", spacing="md", contents=[
+            TextComponent(text=f"持卡人：{uname}", size="sm", weight="bold", color="#111111"),
+            BoxComponent(layout="vertical", background_color="#FFF5F5", corner_radius="8px", padding_all="12px", contents=[
+                TextComponent(text="📋 血型／過敏史／病史／常去醫院：", size="xs", weight="bold", color="#FF3B30"),
+                TextComponent(text=med_info, size="sm", color="#222222", margin="sm", wrap=True)
+            ]),
+            TextComponent(text=f"📍 登記居住地：{loc_str}", size="xs", color="#666666", wrap=True),
+            TextComponent(text="✏️ 如何更新醫療卡？\n請直接在對話框輸入「醫療:」加上您的資訊即可覆蓋更新！\n例如：醫療:O型，盤尼西林過敏，高血壓，常去亞東醫院", size="xxs", color="#888888", margin="md", wrap=True)
+        ]),
+        footer=BoxComponent(layout="vertical", spacing="sm", contents=[
+            ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
+        ])
+    )
 def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置"):
     S = chr(47)
     bind_cmd = urllib.parse.quote(f"綁定:{uid}")
@@ -163,7 +176,8 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=No
 
     footer_btns = [
         ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好")),
-        ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人成為緊急聯絡人", uri=share_uri))
+        ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人成為緊急聯絡人", uri=share_uri)),
+        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🪪 查看／設定緊急醫療卡", text="醫療卡"))
     ]
     if lat is not None and lon is not None:
         enc_addr = urllib.parse.quote(addr)
@@ -193,7 +207,7 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=No
 
 @app.get("/")
 def root():
-    return {"status": "Online", "service": "Solo Care Check-in Bot with Medical Map"}
+    return {"status": "Online", "service": "Solo Care Check-in Bot with Medical Card"}
 
 @app.post("/callback")
 async def callback(request: Request):
@@ -214,7 +228,7 @@ def on_follow(event):
     card = make_main_card(
         "🛡️ 歡迎使用獨居平安簽到助手",
         f"嗨 {uname}！已為您完成首次平安建檔。",
-        f"🕒 首次簽到時間：{t_str}\n⏰ 目前守護週期：24 小時（逾時先提醒本人，2 小時後通知聯絡人）\n\n💡 請先傳送一次居住位置，即可開通「周邊藥局與急診室地圖」！",
+        f"🕒 首次簽到時間：{t_str}\n⏰ 目前守護週期：24 小時（逾時先提醒本人，2 小時後通知聯絡人）\n\n💡 請先傳送居住位置並填寫「緊急醫療卡」，失聯通報時將一併提供給聯絡人！",
         uid
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="歡迎使用獨居平安簽到助手", contents=card))
@@ -240,11 +254,31 @@ def on_text(event):
     uname = get_user_name(uid)
     txt = event.message.text.strip()
 
+    if txt in ["醫療卡", "緊急醫療卡", "急救卡"]:
+        st = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        med = st.get("medical_info", "尚未填寫")
+        loc = st.get("last_location", "尚未設定")
+        m_card = make_medical_card(uname, med, loc)
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="隨身緊急醫療卡", contents=m_card))
+        return
+
+    if txt.startswith("醫療:") or txt.startswith("醫療："):
+        med_content = txt[3:].strip()
+        if not med_content:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 請在「醫療:」後面輸入您的血型、過敏藥物或慢性病史喔！\n例如：醫療:A型，無藥物過敏，高血壓"))
+            return
+        call_sheet({"action": "set_medical", "user_id": uid, "user_name": uname, "medical_info": med_content})
+        st = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        loc = st.get("last_location", "尚未設定")
+        m_card = make_medical_card(uname, med_content, loc)
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="緊急醫療卡更新成功", contents=m_card))
+        return
+
     if txt in ["教學", "說明", "使用教學", "怎麼用", "幫助", "?"]:
         guide_card = make_main_card(
             "📖 獨居平安簽到助手 · 使用教學",
             "每天花 1 秒鐘報平安，守護您的居家安全：",
-            "1. 每日簽到：點下方綠色按鈕，重新計算守護時間。\n2. 彈性週期：可切換 12h / 24h / 48h，逾時先傳訊提醒本人，2 小時無回應才通知聯絡人。\n3. 醫療與平安地圖：更新位置後，可隨時開啟官方街道圖與周邊藥局／急診導航。",
+            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡：點「醫療卡」或輸入「醫療:血型/病史」，失聯通報時將自動附帶給聯絡人。\n3. 醫療與平安地圖：更新位置後可隨時開啟周邊藥局與急診導航。",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
@@ -256,7 +290,7 @@ def on_text(event):
         card = make_main_card(
             f"⏰ 通報週期已更新為 {hours} 小時",
             f"{uname}，您的守護規則已調整完成！",
-            f"🔔 新規則：若超過 {hours} 小時未簽到，系統將先傳送提醒給您；若再過 2 小時仍無回應，將自動通報緊急聯絡人。",
+            f"🔔 新規則：若超過 {hours} 小時未簽到，系統將先傳送提醒給您；若再過 2 小時仍無回應，將自動通報緊急聯絡人並附上緊急醫療卡。",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"通報週期已設為{hours}小時", contents=card))
@@ -269,7 +303,7 @@ def on_text(event):
             return
         res = call_sheet({"action": "bind", "user_id": elder_uid, "contact_id": uid})
         elder_name = res.get("elder_name", "您的親友")
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🤝 【緊急聯絡人綁定成功】\n\n您已正式成為「{elder_name}」的平安守護聯絡人！\n當對方超過設定時間未簽到（且逾 2 小時緩衝預警無回應）時，系統會第一時間透過此 LINE 帳號通知您。"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🤝 【緊急聯絡人綁定成功】\n\n您已正式成為「{elder_name}」的平安守護聯絡人！\n當對方超過設定時間未簽到（且逾 2 小時緩衝預警無回應）時，系統會第一時間將最後位置與緊急醫療卡通知您。"))
         return
 
     if txt in ["狀態", "查詢", "我的狀態", "設定"]:
@@ -277,12 +311,14 @@ def on_text(event):
         c_status = "✅ 已綁定緊急聯絡人" if res.get("has_contact") else "⚠️ 尚未綁定聯絡人（請點下方藍色按鈕邀請）"
         cur_h = res.get("alert_hours", 24)
         loc_str = res.get("last_location", "尚未設定")
+        med_str = res.get("medical_info", "尚未填寫")
         lat, lon = parse_latlon(loc_str)
+        clean_addr = loc_str.split("(")[0].strip() if "(" in loc_str else "最後平安位置"
         card = make_main_card(
             "📋 我的平安守護狀態",
             f"守護對象：{uname}",
-            f"🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n👨‍👩‍👧 聯絡人狀態：{c_status}\n📍 最後平安位置：{loc_str}",
-            uid, lat=lat, lon=lon, addr=loc_str.split("(")[0].strip()
+            f"🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n👨‍👩‍👧 聯絡人狀態：{c_status}\n🪪 緊急醫療卡：{med_str}\n📍 最後平安位置：{loc_str}",
+            uid, lat=lat, lon=lon, addr=clean_addr
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="我的平安守護狀態", contents=card))
         return
@@ -294,10 +330,11 @@ def on_text(event):
     st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
     loc_str = st_info.get("last_location", "")
     lat, lon = parse_latlon(loc_str)
+    clean_addr = loc_str.split("(")[0].strip() if "(" in loc_str else "最後平安位置"
     card = make_main_card(
         "✅ 今日平安簽到成功！",
         f"{uname}，很高興知道您今天一切安好！",
         f"🕒 簽到時間：{t_str}\n⏰ 守護週期：{cur_h} 小時（含 2 小時緩衝）\n🔔 守護狀態：{c_note}",
-        uid, lat=lat, lon=lon, addr=loc_str.split("(")[0].strip() if loc_str else "最後平安位置"
+        uid, lat=lat, lon=lon, addr=clean_addr
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="今日平安簽到成功", contents=card))
