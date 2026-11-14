@@ -165,13 +165,20 @@ def make_medical_card(uname: str, med_info: str, loc_str: str):
                 TextComponent(text=med_info, size="sm", color="#222222", margin="sm", wrap=True)
             ]),
             TextComponent(text=f"📍 登記居住地：{loc_str}", size="xs", color="#666666", wrap=True),
-            TextComponent(text="💡 點擊下方紅色按鈕，輸入框會自動帶入「醫療:」，接著直接打字輸入您的血型與病史並送出即可！", size="xxs", color="#888888", margin="md", wrap=True)
+            TextComponent(
+                text="✏️ 填寫說明：\n點擊下方紅色按鈕後，輸入框會自動帶入「醫療:」並彈出鍵盤，您只要直接接著輸入資料並送出即可！\n\n💡 格式範例：\n醫療:O型，高血壓，無藥物過敏，常去雙和醫院",
+                size="xxs",
+                color="#666666",
+                margin="md",
+                wrap=True
+            )
         ]),
         footer=BoxComponent(layout="vertical", spacing="sm", contents=[
             ButtonComponent(style="primary", color="#FF3B30", height="sm", action=URIAction(label="✏️ 點此直接輸入／修改醫療資料", uri=edit_uri)),
             ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
         ])
     )
+
 
 def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置"):
     S = chr(47)
