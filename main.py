@@ -284,7 +284,7 @@ def on_text(event):
     res = call_sheet({"action": "checkin", "user_id": uid, "user_name": uname})
     t_str = res.get("time", "剛剛")
     cur_h = res.get("alert_hours", 24)
-c_note = "✅ 緊急聯絡人守護中" if res.get("has_contact") else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
+    c_note = "✅ 緊急聯絡人守護中" if res.get("has_contact") else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
     st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
     loc_str = st_info.get("last_location", "")
     lat, lon = parse_latlon(loc_str)
