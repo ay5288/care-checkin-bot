@@ -425,7 +425,7 @@ def on_text(event):
         med_t = res.get("med_times", "尚未設定")
         phone_str = res.get("phone", "尚未設定")
         lat, lon = parse_latlon(loc_str)
-        clean_addr = loc_str.split("(").strip() if "(" in loc_str else "最後平安位置"
+        clean_addr = loc_str.split("(")[0].strip() if "(" in loc_str else "最後平安位置"
         card = make_main_card(
             "📋 我的平安守護狀態",
             f"守護對象：{uname}",
@@ -443,7 +443,7 @@ def on_text(event):
     st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
     loc_str = st_info.get("last_location", "")
     lat, lon = parse_latlon(loc_str)
-    clean_addr = loc_str.split("(").strip() if "(" in loc_str else "最後平安位置"
+    clean_addr = loc_str.split("(")[0].strip() if "(" in loc_str else "最後平安位置"
     card = make_main_card(
         "✅ 今日平安簽到成功！",
         f"{uname}，很高興知道您今天一切安好！",
