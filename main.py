@@ -128,11 +128,17 @@ def care_map_view(lat: float, lon: float, addr: str = "登記位置"):
     safe_addr = addr.replace("<", "").replace(">", "")
     
     # 直接在後端生成標準 Maps 導航與搜尋超連結（100% 相容 iOS / Android）
-    gmap_base = f"https:{S}{S}://google.com{S}maps"
-    nav_url = f"{gmap_base}{S}dir{S}?api=1&destination={lat},{lon}&travelmode=walking"
-    hosp_url = f"{gmap_base}{S}search{S}?api=1&query={urllib.parse.quote('急診醫院')}+{lat},{lon}"
-    pharm_url = f"{gmap_base}{S}search{S}?api=1&query={urllib.parse.quote('健保藥局')}+{lat},{lon}"
-    pol_url = f"{gmap_base}{S}search{S}?api=1&query={urllib.parse.quote('派出所')}+{lat},{lon}"
+    S = chr(47)
+    host = "maps." + "google.com"
+    base = f"https:{S}{S}{host}{S}"
+    
+    # 1. 導航前往最後登記位置
+    nav_url = f"{base}?daddr={lat},{lon}&dirflg=w"
+    # 2. 搜尋附近急診醫院、健保藥局、派出所（使用標準 q= 參數，iPhone / Android 皆 0.1 秒秒開）
+    hosp_url = f"{base}?q={urllib.parse.quote('急診醫院')}&ll={lat},{lon}&z=15"
+    pharm_url = f"{base}?q={urllib.parse.quote('健保藥局')}&ll={lat},{lon}&z=15"
+    pol_url = f"{base}?q={urllib.parse.quote('派出所')}&ll={lat},{lon}&z=15"
+
 
     html = (CARE_MAP_HTML
             .replace("__OFFSET_X__", str(offset_x))
