@@ -192,6 +192,7 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=No
     footer_btns = [
         ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好")),
         ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人（最多綁定5位）", uri=share_uri)),
+        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="👥 管理／解綁緊急聯絡人", text="管理聯絡人")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🪪 緊急醫療卡／登記電話", text="醫療卡")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="💊 設定每日用藥提醒", text="用藥提醒")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🛡️ 防詐騙快篩（貼上可疑簡訊）", text="防詐騙")),
@@ -472,11 +473,70 @@ def on_text(event):
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="日常平安守護已正式啟動", contents=card))
         return
+    if txt in ["管理聯絡人", "聯絡人清單", "解綁聯絡人", "聯絡人"]:
+        S = chr(47)
+        bind_cmd = urllib.parse.quote(f"綁定:{uid}")
+        share_text = urllib.parse.quote(f"我正在使用「獨居平安簽到助手」每天報平安！請點擊下方連結成為我的緊急聯絡人（最多可綁定 5 位親友）：\nhttps:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{bind_cmd}")
+        share_uri = f"https:{S}{S}line.me{S}R{S}share?text={share_text}"
+
+        st = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        c_ids = st.get("contact_ids", [])
+
+        body_contents = [
+            TextComponent(text=f"目前守護人數：{len(c_ids)} / 5 位", size="sm", weight="bold", color="#111111"),
+            TextComponent(text="失聯警報觸發時，系統會同步通知以下所有聯絡人。如需解除某位聯絡人，請直接點擊下方對應的移除按鈕：", size="xs", color="#555555", wrap=True)
+        ]
+        footer_btns = []
+
+        if len(c_ids) == 0:
+            body_contents.append(TextComponent(text="（目前尚未綁定任何緊急聯絡人）", size="xs", color="#888888", margin="md"))
+        else:
+            for idx, cid in enumerate(c_ids, 1):
+                c_name = get_user_name(cid)
+                display_c = c_name if c_name != "用戶" else f"聯絡人 #{idx} ({cid[:6]}...)"
+                footer_btns.append(
+                    ButtonComponent(style="secondary", height="sm", action=MessageAction(label=f"❌ 移除：{display_c}", text=f"解綁:{cid}"))
+                )
+            footer_btns.append(
+                ButtonComponent(style="primary", color="#FF3B30", height="sm", action=MessageAction(label="🗑️ 一鍵清空全部聯絡人", text="清空聯絡人"))
+            )
+
+        if len(c_ids) < 5:
+            footer_btns.append(
+                ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="➕ 繼續邀請家人（上限5位）", uri=share_uri))
+            )
+        footer_btns.append(
+            ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
+        )
+
+        manage_card = BubbleContainer(
+            size="mega",
+            header=BoxComponent(layout="vertical", background_color="#007AFF", padding_all="14px", contents=[
+                TextComponent(text="👥 緊急聯絡人管理與解綁", weight="bold", size="md", color="#FFFFFF", wrap=True)
+            ]),
+            body=BoxComponent(layout="vertical", spacing="md", contents=body_contents),
+            footer=BoxComponent(layout="vertical", spacing="sm", contents=footer_btns)
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="緊急聯絡人管理與解綁", contents=manage_card))
+        return
+
+    if txt.startswith("解綁:"):
+        target_cid = txt[3:].strip()
+        res = call_sheet({"action": "remove_contact", "user_id": uid, "contact_id": target_cid})
+        rem_cnt = res.get("count", 0)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"✅ 已成功解除該位緊急聯絡人的綁定！目前剩餘 {rem_cnt} / 5 位守護聯絡人。\n（輸入「管理聯絡人」可隨時查看最新名單）"))
+        return
+
+    if txt in ["清空聯絡人", "全部解綁"]:
+        call_sheet({"action": "clear_contacts", "user_id": uid})
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🗑️ 已為您清空所有緊急聯絡人名單！如需重新設定，請點擊主卡片上的「👨‍👩‍👧 邀請家人」按鈕。"))
+        return
+
     if txt in ["教學", "說明", "使用教學", "怎麼用", "幫助", "?"]:
         guide_card = make_main_card(
             "📖 獨居平安簽到助手 · 使用教學",
             "每天花 1 秒鐘報平安，守護您的居家安全：",
-            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡與電話：登記血型、病史與本人電話，失聯警報時自動附上「一鍵直撥電話」按鈕給聯絡人。\n3. 用藥提醒與防詐騙：支援多組「小時:分鐘」吃藥提醒，以及可疑簡訊一鍵快篩。\n4. 外出暫停與多位家人：支援 3天/7天/長期暫停守護，最多可綁定 5 位緊急聯絡人！",
+            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡與電話：登記血型、病史與本人電話，失聯警報時自動附上「一鍵直撥電話」按鈕給聯絡人。\n3. 用藥提醒與防詐騙：支援多組「小時:分鐘」吃藥提醒，以及可疑簡訊一鍵快篩。\n4. 外出暫停與聯絡人管理：支援 3天/7天/長期暫停，最多綁定 5 位家人並可隨時一鍵解綁！",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
