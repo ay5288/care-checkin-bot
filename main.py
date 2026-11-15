@@ -188,7 +188,7 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
             ]),
             TextComponent(text=f"📍 登記居住地址：{loc_str}", size="xs", color="#333333", wrap=True),
             TextComponent(
-                text="💡 範例格式：緊急聯絡人:兒子王大明 0912345678 LINE:ming123（填妥電話後，上方會自動出現綠色一鍵直撥按鈕！）",
+                text="💡 範例格式：緊急聯絡人:兒子王大明 0912345678 LINE:ming123（填妥電話後，上方與主卡片會自動出現一鍵直撥按鈕！）",
                 size="xxs",
                 color="#666666",
                 margin="md",
@@ -198,22 +198,37 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
         footer=BoxComponent(layout="vertical", spacing="sm", contents=footer_btns)
     )
 
-def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置"):
+def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=None, lon=None, addr="最後平安位置", ice_contact: str = "尚未設定"):
     S = chr(47)
     bind_cmd = urllib.parse.quote(f"綁定:{uid}")
     share_text = urllib.parse.quote(f"我正在使用「獨居平安簽到助手」每天報平安！請點擊下方連結成為我的緊急聯絡人（最多可綁定 5 位親友）：\nhttps:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{bind_cmd}")
     share_uri = f"https:{S}{S}line.me{S}R{S}share?text={share_text}"
     loc_uri = f"https:{S}{S}line.me{S}R{S}nv{S}location{S}"
+    edit_ice_uri = f"https:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{urllib.parse.quote('緊急聯絡人:')}"
+
+    ice_phone_match = re.search(r"0\d[\d\-]{7,11}", str(ice_contact or ""))
+    clean_ice_phone = re.sub(r"[^0-9]", "", ice_phone_match.group(0)) if ice_phone_match else ""
 
     footer_btns = [
-        ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好")),
+        ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好"))
+    ]
+    if len(clean_ice_phone) >= 8:
+        footer_btns.append(
+            ButtonComponent(style="primary", color="#FF9500", height="sm", action=URIAction(label=f"📞 一鍵撥打緊急聯絡人 ({clean_ice_phone})", uri=f"tel:{clean_ice_phone}"))
+        )
+    else:
+        footer_btns.append(
+            ButtonComponent(style="secondary", height="sm", action=URIAction(label="📞 設定一鍵撥號緊急聯絡人", uri=edit_ice_uri))
+        )
+
+    footer_btns.extend([
         ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人（最多綁定5位）", uri=share_uri)),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="👥 管理／解綁緊急聯絡人", text="管理聯絡人")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🪪 緊急醫療卡／聯絡人與地址", text="醫療卡")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="💊 設定每日用藥提醒", text="用藥提醒")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🛡️ 防詐騙快篩（貼上可疑簡訊）", text="防詐騙")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="✈️ 外出／住院暫停守護", text="暫停模式"))
-    ]
+    ])
     if lat is not None and lon is not None:
         enc_addr = urllib.parse.quote(addr)
         map_uri = f"{RENDER_BASE_URL}/care_map?lat={lat}&lon={lon}&addr={enc_addr}&openExternalBrowser=1"
@@ -275,11 +290,13 @@ def on_location(event):
     addr = event.message.address or "已定位座標"
     lat, lon = event.message.latitude, event.message.longitude
     call_sheet({"action": "location", "user_id": uid, "user_name": uname, "address": addr, "lat": lat, "lon": lon})
+    st = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+    ice_str = st.get("ice_contact", "尚未設定")
     card = make_main_card(
         "📍 居住位置與醫療地圖已開通",
         "已將此位置設為您的最後平安參考座標：",
         f"🏠 登記地址：{addr}\n🏥 點擊下方紅色按鈕，可立即查看此位置的台灣官方街道圖，並一鍵搜尋周邊急診醫院與健保藥局！",
-        uid, lat=lat, lon=lon, addr=addr
+        uid, lat=lat, lon=lon, addr=addr, ice_contact=ice_str
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="居住位置更新成功", contents=card))
 
@@ -501,11 +518,13 @@ def on_text(event):
         res = call_sheet({"action": "pause", "user_id": uid, "user_name": uname, "mode": mode_val})
         r_time = res.get("resume_time", "")
         title_label = "⏸️ 已開啟長期暫停守護" if mode_val == "indefinite" else f"⏸️ 已暫停守護（{mode_val} 天）"
+        st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        ice_str = st_info.get("ice_contact", "尚未設定")
         card = make_main_card(
             title_label,
             f"{uname}，已為您暫停失聯通報功能！",
             f"🕒 恢復規則：{r_time}\n🛡️ 期間內系統不會發送失聯警報；若想提前恢復，只要點擊「▶️ 啟動守護」或「🟢 我今天很好」即可立刻重新啟動！",
-            uid
+            uid, ice_contact=ice_str
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=title_label, contents=card))
         return
@@ -514,11 +533,13 @@ def on_text(event):
         res = call_sheet({"action": "checkin", "user_id": uid, "user_name": uname})
         t_str = res.get("time", "剛剛")
         cur_h = res.get("alert_hours", 24)
+        st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        ice_str = st_info.get("ice_contact", "尚未設定")
         card = make_main_card(
             "▶️ 日常平安守護已正式啟動！",
             f"{uname}，歡迎回來！系統已重新開始為您守護：",
             f"🕒 啟動時間：{t_str}\n⏰ 守護週期：{cur_h} 小時（含 2 小時緩衝）\n🟢 守護狀態：正常運作中",
-            uid
+            uid, ice_contact=ice_str
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="日常平安守護已正式啟動", contents=card))
         return
@@ -618,11 +639,13 @@ def on_text(event):
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="個人資料已徹底刪除", contents=bye_card))
         return
     if txt in ["教學", "說明", "使用教學", "怎麼用", "幫助", "?"]:
+        st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        ice_str = st_info.get("ice_contact", "尚未設定")
         guide_card = make_main_card(
             "📖 獨居平安簽到助手 · 使用教學",
             "每天花 1 秒鐘報平安，守護您的居家安全：",
-            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡與聯絡人直撥：登記血型病史、門牌地址、本人電話與緊急聯絡人電話/LINE，隨時可一鍵直撥緊急聯絡人或 119。\n3. 用藥提醒與防詐騙：支援多組「小時:分鐘」吃藥提醒，以及可疑簡訊一鍵快篩。\n4. 外出暫停與帳號自主權：支援 3天/7天/長期暫停，最多綁定 5 位家人並可隨時一鍵解綁或刪除個人資料！",
-            uid
+            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 一鍵直撥緊急聯絡人：設定緊急聯絡人電話後，主畫面與醫療卡均會顯示一鍵撥號按鈕。\n3. 用藥提醒與防詐騙：支援多組「小時:分鐘」吃藥提醒，以及可疑簡訊一鍵快篩。\n4. 外出暫停與帳號自主權：支援 3天/7天/長期暫停，最多綁定 5 位家人並可隨時一鍵解綁或刪除個人資料！",
+            uid, ice_contact=ice_str
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
         return
@@ -630,11 +653,13 @@ def on_text(event):
     if txt in ["設定12", "設定24", "設定48"]:
         hours = int(txt.replace("設定", ""))
         call_sheet({"action": "set_hours", "user_id": uid, "user_name": uname, "hours": hours})
+        st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        ice_str = st_info.get("ice_contact", "尚未設定")
         card = make_main_card(
             f"⏰ 通報週期已更新為 {hours} 小時",
             f"{uname}，您的守護規則已調整完成！",
             f"🔔 新規則：若超過 {hours} 小時未簽到，系統將先傳送提醒給您；若再過 2 小時仍無回應，將自動通報所有已綁定的緊急聯絡人並附上緊急醫療卡與直撥電話。",
-            uid
+            uid, ice_contact=ice_str
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text=f"通報週期已設為{hours}小時", contents=card))
         return
@@ -712,8 +737,8 @@ def on_text(event):
         card = make_main_card(
             "📋 我的平安守護狀態",
             f"守護對象：{uname}",
-            f"🛡️ 守護開關：{guard_label}\n🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n💊 用藥提醒：{med_t}\n👨‍👩‍👧 聯絡人狀態：{c_status}\n📞 本人電話：{phone_str}\n🆘 醫療卡聯絡人：{ice_str}\n🪪 緊急醫療卡：{med_str}\n📍 最後平安位置：{loc_str}",
-            uid, lat=lat, lon=lon, addr=clean_addr
+            f"🛡️ 守護開關：{guard_label}\n🕒 最後簽到：{res.get('last_checkin', '無紀錄')}\n⏰ 通報週期：{cur_h} 小時（含 2 小時緩衝）\n💊 用藥提醒：{med_t}\n👨‍👩‍👧 聯絡人狀態：{c_status}\n📞 本人電話：{phone_str}\n🆘 一鍵撥號聯絡人：{ice_str}\n🪪 緊急醫療卡：{med_str}\n📍 最後平安位置：{loc_str}",
+            uid, lat=lat, lon=lon, addr=clean_addr, ice_contact=ice_str
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="我的平安守護狀態", contents=card))
         return
@@ -725,12 +750,13 @@ def on_text(event):
     c_note = f"✅ {c_cnt} 位緊急聯絡人守護中" if c_cnt > 0 else "⚠️ 提醒：您尚未綁定緊急聯絡人，請點下方藍色按鈕傳送邀請給家人！"
     st_info = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
     loc_str = st_info.get("last_location", "")
+    ice_str = st_info.get("ice_contact", "尚未設定")
     lat, lon = parse_latlon(loc_str)
     clean_addr = next(iter(loc_str.split("("))).strip() if "(" in loc_str else "最後平安位置"
     card = make_main_card(
         "✅ 今日平安簽到成功！",
         f"{uname}，很高興知道您今天一切安好！",
         f"🕒 簽到時間：{t_str}\n⏰ 守護週期：{cur_h} 小時（含 2 小時緩衝）\n🔔 守護狀態：{c_note}",
-        uid, lat=lat, lon=lon, addr=clean_addr
+        uid, lat=lat, lon=lon, addr=clean_addr, ice_contact=ice_str
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="今日平安簽到成功", contents=card))
