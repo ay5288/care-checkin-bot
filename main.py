@@ -151,10 +151,12 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
     S = chr(47)
     edit_med_uri = f"https:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{urllib.parse.quote('醫療:')}"
     edit_phone_uri = f"https:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{urllib.parse.quote('電話:')}"
+    edit_addr_uri = f"https:{S}{S}line.me{S}R{S}oaMessage{S}{LINE_BOT_BASIC_ID}{S}?{urllib.parse.quote('地址:')}"
 
     footer_btns = [
         ButtonComponent(style="primary", color="#FF3B30", height="sm", action=URIAction(label="🚨 緊急撥打 119 救護專線", uri="tel:119")),
         ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="✏️ 輸入／修改醫療資料", uri=edit_med_uri)),
+        ButtonComponent(style="secondary", height="sm", action=URIAction(label="🏠 登記／修改居住地址", uri=edit_addr_uri)),
         ButtonComponent(style="secondary", height="sm", action=URIAction(label="📱 登記／修改本人電話（供警報通報）", uri=edit_phone_uri)),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="📋 返回我的守護狀態", text="我的狀態"))
     ]
@@ -170,9 +172,9 @@ def make_medical_card(uname: str, med_info: str, loc_str: str, phone: str = "尚
                 TextComponent(text="📋 血型／過敏史／病史／常去醫院：", size="xs", weight="bold", color="#FF3B30"),
                 TextComponent(text=med_info, size="sm", color="#222222", margin="sm", wrap=True)
             ]),
-            TextComponent(text=f"📍 登記居住地：{loc_str}", size="xs", color="#666666", wrap=True),
+            TextComponent(text=f"📍 登記居住地址：{loc_str}", size="xs", color="#333333", wrap=True),
             TextComponent(
-                text="💡 說明：登記的「本人電話」將於觸發失聯警報時，附帶一鍵直撥按鈕發送給您的緊急聯絡人。",
+                text="💡 說明：點擊下方按鈕可一鍵預填「醫療:」、「地址:」或「電話:」直接修改，失聯警報時將完整提供給緊急聯絡人與救護人員。",
                 size="xxs",
                 color="#666666",
                 margin="md",
@@ -193,7 +195,7 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=No
         ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 我今天很好（一鍵簽到）", text="我今天很好")),
         ButtonComponent(style="primary", color="#007AFF", height="sm", action=URIAction(label="👨‍👩‍👧 邀請家人（最多綁定5位）", uri=share_uri)),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="👥 管理／解綁緊急聯絡人", text="管理聯絡人")),
-        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🪪 緊急醫療卡／登記電話", text="醫療卡")),
+        ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🪪 緊急醫療卡／地址與電話", text="醫療卡")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="💊 設定每日用藥提醒", text="用藥提醒")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🛡️ 防詐騙快篩（貼上可疑簡訊）", text="防詐騙")),
         ButtonComponent(style="secondary", height="sm", action=MessageAction(label="✈️ 外出／住院暫停守護", text="暫停模式"))
@@ -202,7 +204,8 @@ def make_main_card(title: str, subtitle: str, status_text: str, uid: str, lat=No
         enc_addr = urllib.parse.quote(addr)
         map_uri = f"{RENDER_BASE_URL}/care_map?lat={lat}&lon={lon}&addr={enc_addr}&openExternalBrowser=1"
         footer_btns.append(ButtonComponent(style="primary", color="#FF3B30", height="sm", action=URIAction(label="🏥 最後位置與周邊藥局／急診", uri=map_uri)))
-    footer_btns.append(ButtonComponent(style="secondary", height="sm", action=URIAction(label="📍 更新我的居住位置", uri=loc_uri)))
+    footer_btns.append(ButtonComponent(style="secondary", height="sm", action=URIAction(label="📍 傳送 GPS 定位座標", uri=loc_uri)))
+    footer_btns.append(ButtonComponent(style="secondary", height="sm", action=MessageAction(label="🗑️ 刪除個人資料（完全重置）", text="刪除個人資料")))
 
     return BubbleContainer(
         size="mega",
@@ -246,7 +249,7 @@ def on_follow(event):
     card = make_main_card(
         "🛡️ 歡迎使用獨居平安簽到助手",
         f"嗨 {uname}！已為您完成首次平安建檔。",
-        f"🕒 首次簽到時間：{t_str}\n⏰ 目前守護週期：24 小時（逾時先提醒本人，2 小時後通知聯絡人）\n\n💡 請先傳送居住位置並填寫「緊急醫療卡／登記電話」，最多可邀請 5 位家人成為緊急聯絡人！",
+        f"🕒 首次簽到時間：{t_str}\n⏰ 目前守護週期：24 小時（逾時先提醒本人，2 小時後通知聯絡人）\n\n💡 請先填寫「緊急醫療卡／地址與電話」並傳送 GPS 定位，最多可邀請 5 位家人成為緊急聯絡人！",
         uid
     )
     line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="歡迎使用獨居平安簽到助手", contents=card))
@@ -364,6 +367,20 @@ def on_text(event):
         phone = st.get("phone", "尚未設定")
         m_card = make_medical_card(uname, med_content, loc, phone)
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="緊急醫療卡更新成功", contents=m_card))
+        return
+
+    if txt.startswith("地址:") or txt.startswith("地址："):
+        addr_val = txt[3:].strip()
+        if not addr_val:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 請在「地址:」後面輸入您的完整居住地址與樓層喔！\n例如：地址:新北市五股區成泰路一段100號5樓"))
+            return
+        res = call_sheet({"action": "set_address", "user_id": uid, "user_name": uname, "address": addr_val})
+        st = call_sheet({"action": "status", "user_id": uid, "user_name": uname})
+        med = st.get("medical_info", "尚未填寫")
+        loc = res.get("last_location", addr_val)
+        phone = st.get("phone", "尚未設定")
+        m_card = make_medical_card(uname, med, loc, phone)
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="居住地址登記成功", contents=m_card))
         return
 
     if txt.startswith("電話:") or txt.startswith("電話："):
@@ -532,11 +549,47 @@ def on_text(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="🗑️ 已為您清空所有緊急聯絡人名單！如需重新設定，請點擊主卡片上的「👨‍👩‍👧 邀請家人」按鈕。"))
         return
 
+    if txt in ["刪除個人資料", "刪除資料", "清除個人資料", "註銷帳號"]:
+        del_card = BubbleContainer(
+            size="mega",
+            header=BoxComponent(layout="vertical", background_color="#FF3B30", padding_all="14px", contents=[
+                TextComponent(text="⚠️ 確認要徹底刪除個人資料？", weight="bold", size="md", color="#FFFFFF", wrap=True)
+            ]),
+            body=BoxComponent(layout="vertical", spacing="md", contents=[
+                TextComponent(text="執行後，系統將從雲端資料庫永久刪除您的所有紀錄，且無法復原：", size="sm", weight="bold", color="#111111", wrap=True),
+                TextComponent(text="• 簽到時間與守護週期設定\n• 已綁定的緊急聯絡人名單\n• 登記居住地址、電話、緊急醫療卡與用藥提醒", size="xs", color="#555555", wrap=True),
+                TextComponent(text="（若未來想重新使用，只需再次點擊「我今天很好」即可重新建檔）", size="xxs", color="#888888", wrap=True)
+            ]),
+            footer=BoxComponent(layout="vertical", spacing="sm", contents=[
+                ButtonComponent(style="primary", color="#FF3B30", height="sm", action=MessageAction(label="🚨 確定永久刪除我的所有資料", text="確認刪除個人資料")),
+                ButtonComponent(style="secondary", height="sm", action=MessageAction(label="↩️ 取消，返回我的守護狀態", text="我的狀態"))
+            ])
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="確認刪除個人資料", contents=del_card))
+        return
+
+    if txt == "確認刪除個人資料":
+        call_sheet({"action": "delete_user", "user_id": uid})
+        bye_card = BubbleContainer(
+            size="mega",
+            header=BoxComponent(layout="vertical", background_color="#333333", padding_all="14px", contents=[
+                TextComponent(text="🗑️ 個人資料已徹底刪除", weight="bold", size="md", color="#FFFFFF")
+            ]),
+            body=BoxComponent(layout="vertical", spacing="md", contents=[
+                TextComponent(text="您的所有平安簽到紀錄、聯絡人綁定、地址座標、電話與緊急醫療卡資訊均已從資料庫永久移除，系統也不會再對您發送任何推播通知。", size="xs", color="#333333", wrap=True),
+                TextComponent(text="感謝您的使用！若日後有需要，隨時點擊下方按鈕即可重新建檔啟用。", size="xs", color="#666666", wrap=True)
+            ]),
+            footer=BoxComponent(layout="vertical", contents=[
+                ButtonComponent(style="primary", color="#1DB446", height="sm", action=MessageAction(label="🟢 重新啟用並報平安", text="我今天很好"))
+            ])
+        )
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="個人資料已徹底刪除", contents=bye_card))
+        return
     if txt in ["教學", "說明", "使用教學", "怎麼用", "幫助", "?"]:
         guide_card = make_main_card(
             "📖 獨居平安簽到助手 · 使用教學",
             "每天花 1 秒鐘報平安，守護您的居家安全：",
-            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡與電話：登記血型、病史與本人電話，失聯警報時自動附上「一鍵直撥電話」按鈕給聯絡人。\n3. 用藥提醒與防詐騙：支援多組「小時:分鐘」吃藥提醒，以及可疑簡訊一鍵快篩。\n4. 外出暫停與聯絡人管理：支援 3天/7天/長期暫停，最多綁定 5 位家人並可隨時一鍵解綁！",
+            "1. 每日簽到：點綠色按鈕重新計算守護時間。\n2. 緊急醫療卡與地址電話：登記血型、病史、門牌地址與本人電話，失聯警報時自動附上「一鍵直撥電話」按鈕給聯絡人。\n3. 用藥提醒與防詐騙：支援多組「小時:分鐘」吃藥提醒，以及可疑簡訊一鍵快篩。\n4. 外出暫停與帳號自主權：支援 3天/7天/長期暫停，最多綁定 5 位家人並可隨時一鍵解綁或刪除個人資料！",
             uid
         )
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="獨居平安簽到助手使用教學", contents=guide_card))
